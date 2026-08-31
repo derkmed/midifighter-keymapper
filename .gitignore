@@ -1,0 +1,10 @@
+# Rust build output
+/target
+**/target
+
+# Throwaway prototype spikes (map F3) — never ship
+/scratch/
+
+# OS cruft
+.DS_Store
+Thumbs.db
