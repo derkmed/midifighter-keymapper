@@ -1,0 +1,19 @@
+[package]
+name = "midifighter-keymapper-engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Runtime engine: midir device I/O + enigo input injection, wiring the pure core to hardware."
+
+[lib]
+name = "midifighter_keymapper_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mfkm-headless"
+path = "src/main.rs"
+
+[dependencies]
+midifighter-keymapper-core = { path = "../core" }
+midir = "0.10"
+enigo = "0.3"
