@@ -2,6 +2,9 @@
 /target
 **/target
 
+# Tauri build-generated schemas
+/app/gen/
+
 # Throwaway prototype spikes (map F3) — never ship
 /scratch/
 

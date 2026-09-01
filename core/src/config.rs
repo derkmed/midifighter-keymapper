@@ -15,10 +15,11 @@ fn default_base_note() -> u8 {
 }
 
 /// How a button behaves while pressed (ADR 0002).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TriggerMode {
     /// Run the macro once on press.
+    #[default]
     Tap,
     /// Hold the (single-chord) binding's keys down while the pad is held.
     Hold,
@@ -51,6 +52,7 @@ pub enum MacroStep {
 /// The action + appearance bound to one pad.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Binding {
+    #[serde(default)]
     pub trigger: TriggerMode,
     /// The macro steps. Serialized as `"macro"` (a Rust keyword).
     #[serde(rename = "macro")]
@@ -223,6 +225,17 @@ mod tests {
         cfg.profiles[0].bindings[1].binding.steps =
             vec![MacroStep::Text { text: "no".into() }];
         assert!(validate(&cfg).is_err());
+    }
+
+    #[test]
+    fn deserializes_frontend_pad_json() {
+        // The exact shape the GUI sends to the upsert_binding command.
+        let json = r#"{"bank":0,"cell":12,"binding":{"trigger":"tap","macro":[{"type":"chord","keys":["c"]}],"color":7}}"#;
+        let pad: PadBinding = serde_json::from_str(json).unwrap();
+        assert_eq!(pad.bank, 0);
+        assert_eq!(pad.cell, 12);
+        assert_eq!(pad.binding.trigger, TriggerMode::Tap);
+        assert_eq!(pad.binding.color, Color(7));
     }
 
     #[test]

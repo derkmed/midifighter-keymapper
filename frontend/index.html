@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Midi Fighter Key-Mapper</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Midi Fighter <span>Key-Mapper</span></div>
+      <div class="profile-controls">
+        <label>Profile
+          <select id="profile-select"></select>
+        </label>
+        <button id="profile-new">New</button>
+        <button id="profile-rename">Rename</button>
+        <button id="profile-delete">Delete</button>
+        <button id="save" class="primary">Save</button>
+        <button id="engine-toggle" class="engine">▶ Start mapping</button>
+      </div>
+      <div id="status" class="status"></div>
+    </header>
+
+    <main class="layout">
+      <section class="grid-pane">
+        <div class="bank-tabs" id="bank-tabs"></div>
+        <div class="grid" id="grid"></div>
+        <p class="hint">Cell 0 is the bottom-left pad, matching the hardware.</p>
+      </section>
+
+      <aside class="panel" id="panel">
+        <h2 id="panel-title">No pad selected</h2>
+        <div id="panel-body" class="panel-body hidden">
+          <div class="row">
+            <span class="label">Trigger</span>
+            <div class="seg" id="trigger-seg">
+              <button data-mode="tap" class="active">Tap</button>
+              <button data-mode="hold">Hold</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="label">Keys</span>
+            <div class="keys">
+              <code id="keys-display">—</code>
+              <button id="capture">Capture combo</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="label">Color</span>
+            <div class="color">
+              <input type="range" id="color-range" min="0" max="127" value="7" />
+              <span id="color-val">7</span>
+              <span id="color-swatch" class="swatch"></span>
+            </div>
+          </div>
+
+          <div class="row actions">
+            <button id="apply" class="primary">Apply to pad</button>
+            <button id="clear">Clear pad</button>
+          </div>
+          <p class="note">Full multi-step macros (text, delays, mouse) come in the next build; this cut edits a single chord + color per pad. Color is a raw device velocity — the exact palette is generated later.</p>
+        </div>
+      </aside>
+    </main>
+
+    <script src="main.js"></script>
+  </body>
+</html>
