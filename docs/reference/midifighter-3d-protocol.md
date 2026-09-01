@@ -31,6 +31,21 @@ on the wire it's just a note number on Ch3. The app can derive bank+cell from th
 note (`bank = note/16`, `cell = note%16`) given the base — no separate bank-state
 tracking needed to know which button fired.
 
+## Physical cell layout (confirmed via engine smoke test)
+
+`cell = note - base` (base 36), and the physical arrangement of cells on the 4×4
+grid is **bottom row first**:
+
+```
+row (top)     12 13 14 15
+              8  9  10 11
+              4  5  6  7
+row (bottom)  0  1  2  3
+```
+
+The GUI's on-screen grid must map cell 0 to the **bottom-left** pad (not top-left)
+so it matches the hardware. Base note 36 confirmed: bank 0 cell 0 == note 36.
+
 ## Bank / side buttons
 
 The 4 bank select buttons send **Note On on Ch4**, notes 0–3 (`93 00`..`93 03`),

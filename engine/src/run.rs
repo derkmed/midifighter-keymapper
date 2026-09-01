@@ -34,6 +34,9 @@ pub fn run(profile: &Profile) -> Result<(), String> {
 
     let mut sink = EnigoSink::new().map_err(|e| e.0)?;
 
+    // Opt-in verbose event logging for debugging (`MFKM_DEBUG=1`).
+    let debug = std::env::var_os("MFKM_DEBUG").is_some();
+
     println!(
         "Engine running for profile {:?} ({} bindings). Press Ctrl+C to quit.",
         profile.name,
@@ -44,8 +47,17 @@ pub fn run(profile: &Profile) -> Result<(), String> {
         let (press, bank, cell) = match event {
             DeviceEvent::GridPress { bank, cell } => (PressEvent::Down, bank, cell),
             DeviceEvent::GridRelease { bank, cell } => (PressEvent::Up, bank, cell),
-            DeviceEvent::BankButton { .. } => continue, // implicit in note numbering
+            DeviceEvent::BankButton { index } => {
+                if debug {
+                    println!("bank button {index}");
+                }
+                continue;
+            }
         };
+        if debug {
+            let bound = bindings.contains_key(&(bank, cell));
+            println!("{event:?} -> bank {bank} cell {cell} (bound: {bound})");
+        }
         if let Some(binding) = bindings.get(&(bank, cell)) {
             let actions = plan(binding, press);
             if let Err(e) = execute(&actions, &mut sink) {
