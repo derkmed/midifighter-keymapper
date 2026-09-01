@@ -79,6 +79,14 @@ pub struct Profile {
     pub bindings: Vec<PadBinding>,
 }
 
+/// App-wide preferences (not per-profile).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Settings {
+    /// Start the mapping engine automatically when the app launches.
+    #[serde(default)]
+    pub start_mapping_on_launch: bool,
+}
+
 /// Top-level config: all profiles and which one is active.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -86,6 +94,8 @@ pub struct Config {
     pub active: Option<String>,
     #[serde(default)]
     pub profiles: Vec<Profile>,
+    #[serde(default)]
+    pub settings: Settings,
 }
 
 /// A reason a config is invalid.
@@ -150,6 +160,7 @@ mod tests {
     fn sample_config() -> Config {
         Config {
             active: Some("default".into()),
+            settings: Settings::default(),
             profiles: vec![Profile {
                 id: "default".into(),
                 name: "Default".into(),
@@ -225,6 +236,20 @@ mod tests {
         cfg.profiles[0].bindings[1].binding.steps =
             vec![MacroStep::Text { text: "no".into() }];
         assert!(validate(&cfg).is_err());
+    }
+
+    #[test]
+    fn settings_default_off_and_backcompat() {
+        // A config with no "settings" key (existing on-disk files) still loads,
+        // defaulting the setting off.
+        let cfg: Config = serde_json::from_str(r#"{"active":null,"profiles":[]}"#).unwrap();
+        assert_eq!(cfg.settings.start_mapping_on_launch, false);
+        // Round-trips when set.
+        let mut cfg2 = Config::default();
+        cfg2.settings.start_mapping_on_launch = true;
+        let json = serde_json::to_string(&cfg2).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.settings.start_mapping_on_launch, true);
     }
 
     #[test]

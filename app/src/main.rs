@@ -6,7 +6,12 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use midifighter_keymapper_core::config::{self, Config, PadBinding};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+
+use midifighter_keymapper_core::config::{self, Config, PadBinding, Settings};
 use midifighter_keymapper_core::edit;
 use midifighter_keymapper_core::midi::{self, Color};
 use midifighter_keymapper_engine::device;
@@ -20,6 +25,38 @@ struct AppState {
 
 fn snapshot(state: &AppState) -> Config {
     state.config.lock().unwrap().clone()
+}
+
+fn persist(state: &AppState) -> Result<(), String> {
+    let cfg = state.config.lock().unwrap();
+    let path = state
+        .path
+        .clone()
+        .ok_or_else(|| "no config path available".to_string())?;
+    config::save(&cfg, &path).map_err(|e| e.to_string())
+}
+
+/// Start the mapping engine for the active profile. Shared by the command, the
+/// tray, and launch auto-start.
+fn spawn_engine(state: &AppState) -> Result<(), String> {
+    let profile = {
+        let cfg = state.config.lock().unwrap();
+        let active = cfg
+            .active
+            .clone()
+            .ok_or_else(|| "no active profile to run".to_string())?;
+        cfg.profiles
+            .iter()
+            .find(|p| p.id == active)
+            .cloned()
+            .ok_or_else(|| "active profile not found".to_string())?
+    };
+    let mut engine = state.engine.lock().unwrap();
+    if let Some(handle) = engine.take() {
+        handle.stop();
+    }
+    *engine = Some(run::spawn(profile)?);
+    Ok(())
 }
 
 #[tauri::command]
@@ -85,13 +122,11 @@ fn remove_binding(
 /// Persist the current config to disk after validating it.
 #[tauri::command]
 fn save_config(state: tauri::State<AppState>) -> Result<(), String> {
-    let cfg = state.config.lock().unwrap();
-    config::validate(&cfg).map_err(|errs| format!("invalid config: {errs:?}"))?;
-    let path = state
-        .path
-        .clone()
-        .ok_or_else(|| "no config path available".to_string())?;
-    config::save(&cfg, &path).map_err(|e| e.to_string())
+    {
+        let cfg = state.config.lock().unwrap();
+        config::validate(&cfg).map_err(|errs| format!("invalid config: {errs:?}"))?;
+    }
+    persist(&state)
 }
 
 /// Live-preview a pad color on the device (only valid while the engine is not
@@ -103,31 +138,11 @@ fn preview_color(base_note: u8, bank: u8, cell: u8, color: u8) -> Result<(), Str
         .map_err(|e| e.to_string())
 }
 
-/// Start mapping: run the active profile's engine on a background thread. The
-/// engine owns the device while running, so color preview is unavailable then.
 #[tauri::command]
 fn start_engine(state: tauri::State<AppState>) -> Result<(), String> {
-    let profile = {
-        let cfg = state.config.lock().unwrap();
-        let active = cfg
-            .active
-            .clone()
-            .ok_or_else(|| "no active profile to run".to_string())?;
-        cfg.profiles
-            .iter()
-            .find(|p| p.id == active)
-            .cloned()
-            .ok_or_else(|| "active profile not found".to_string())?
-    };
-    let mut engine = state.engine.lock().unwrap();
-    if let Some(handle) = engine.take() {
-        handle.stop();
-    }
-    *engine = Some(run::spawn(profile)?);
-    Ok(())
+    spawn_engine(&state)
 }
 
-/// Stop mapping.
 #[tauri::command]
 fn stop_engine(state: tauri::State<AppState>) {
     if let Some(handle) = state.engine.lock().unwrap().take() {
@@ -135,10 +150,38 @@ fn stop_engine(state: tauri::State<AppState>) {
     }
 }
 
-/// Whether the mapping engine is currently running.
 #[tauri::command]
 fn engine_running(state: tauri::State<AppState>) -> bool {
     state.engine.lock().unwrap().is_some()
+}
+
+#[tauri::command]
+fn get_settings(state: tauri::State<AppState>) -> Settings {
+    state.config.lock().unwrap().settings.clone()
+}
+
+/// Toggle "start mapping when the app launches" and persist it.
+#[tauri::command]
+fn set_start_on_launch(state: tauri::State<AppState>, enabled: bool) -> Result<(), String> {
+    state.config.lock().unwrap().settings.start_mapping_on_launch = enabled;
+    persist(&state)
+}
+
+/// Whether the app is registered to launch at OS login.
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Register/unregister the app to launch at OS login.
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
 }
 
 fn main() {
@@ -149,10 +192,52 @@ fn main() {
         .unwrap_or_default();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(AppState {
             config: Mutex::new(config),
             path,
             engine: Mutex::new(None),
+        })
+        .setup(|app| {
+            // System tray: show the window, or quit entirely.
+            let show = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Midi Fighter Key-Mapper")
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
+
+            // Auto-start mapping on launch if the user enabled it.
+            let state = app.state::<AppState>();
+            let start = state.config.lock().unwrap().settings.start_mapping_on_launch;
+            if start {
+                if let Err(e) = spawn_engine(state.inner()) {
+                    eprintln!("auto-start mapping failed: {e}");
+                }
+            }
+            Ok(())
+        })
+        // Closing the window hides it to the tray instead of quitting.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
@@ -166,7 +251,11 @@ fn main() {
             preview_color,
             start_engine,
             stop_engine,
-            engine_running
+            engine_running,
+            get_settings,
+            set_start_on_launch,
+            get_autostart,
+            set_autostart
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

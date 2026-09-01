@@ -35,6 +35,10 @@ html, body {
 .profile-controls { display: flex; align-items: center; gap: 8px; }
 .profile-controls label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
 
+.settings-controls { display: flex; gap: 14px; margin-left: 12px; }
+.settings-controls label { color: var(--muted); display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.settings-controls input { cursor: pointer; }
+
 .status { margin-left: auto; color: var(--muted); min-height: 1em; }
 .status.error { color: var(--danger); }
 .status.ok { color: var(--accent); }

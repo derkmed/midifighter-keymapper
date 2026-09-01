@@ -297,6 +297,23 @@ function wire() {
     }
     renderEngine();
   };
+
+  $("autostart").onchange = async (e) => {
+    try {
+      await invoke("set_autostart", { enabled: e.target.checked });
+      setStatus(e.target.checked ? "Will launch at login" : "Won't launch at login", "ok");
+    } catch (err) {
+      setStatus(String(err), "error");
+      e.target.checked = await invoke("get_autostart").catch(() => false);
+    }
+  };
+  $("start-on-launch").onchange = async (e) => {
+    try {
+      await invoke("set_start_on_launch", { enabled: e.target.checked });
+    } catch (err) {
+      setStatus(String(err), "error");
+    }
+  };
 }
 
 function renderEngine() {
@@ -310,6 +327,8 @@ function renderEngine() {
   wire();
   config = await invoke("get_config");
   engineRunning = await invoke("engine_running");
+  try { $("autostart").checked = await invoke("get_autostart"); } catch (_) {}
+  try { $("start-on-launch").checked = (await invoke("get_settings")).start_mapping_on_launch; } catch (_) {}
   renderEngine();
   renderAll();
 })();
