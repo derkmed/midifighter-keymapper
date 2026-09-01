@@ -49,10 +49,13 @@
           </div>
 
           <div class="row">
-            <span class="label">Keys</span>
-            <div class="keys">
-              <code id="keys-display">—</code>
-              <button id="capture">Capture combo</button>
+            <span class="label">Macro</span>
+            <div id="steps" class="steps"></div>
+            <div class="add-steps">
+              <button data-add="chord">+ Chord</button>
+              <button data-add="text">+ Text</button>
+              <button data-add="delay">+ Delay</button>
+              <button data-add="mouse">+ Mouse</button>
             </div>
           </div>
 
@@ -64,7 +67,7 @@
           <div class="row actions">
             <button id="clear">Clear pad</button>
           </div>
-          <p class="note">Edits apply live — capture a combo, drag the color, or switch Tap/Hold and the pad updates instantly. Use <b>Save</b> to persist to disk. Full multi-step macros come in the next build; this cut edits a single chord + color per pad. Color is a raw device velocity — the exact palette is generated later.</p>
+          <p class="note">Edits apply live and <b>Save</b> persists to disk. A macro runs its steps in order on Tap. <b>Hold</b> is available only when the macro is a single chord (it holds those keys while the pad is held).</p>
         </div>
       </aside>
     </main>

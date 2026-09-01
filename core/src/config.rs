@@ -253,6 +253,25 @@ mod tests {
     }
 
     #[test]
+    fn macro_step_kinds_round_trip() {
+        // The exact shapes the macro editor emits for each step kind.
+        let json = r#"[
+            {"type":"chord","keys":["ctrl","c"]},
+            {"type":"text","text":"hi"},
+            {"type":"delay","ms":100},
+            {"type":"mouse","action":"left_click"},
+            {"type":"mouse","action":{"move_to":{"x":10,"y":20}}}
+        ]"#;
+        let steps: Vec<MacroStep> = serde_json::from_str(json).unwrap();
+        assert_eq!(steps.len(), 5);
+        assert_eq!(steps[3], MacroStep::Mouse { action: MouseAction::LeftClick });
+        assert_eq!(steps[4], MacroStep::Mouse { action: MouseAction::MoveTo { x: 10, y: 20 } });
+        // Re-serialize and read back to confirm the contract is stable.
+        let back: Vec<MacroStep> = serde_json::from_str(&serde_json::to_string(&steps).unwrap()).unwrap();
+        assert_eq!(back, steps);
+    }
+
+    #[test]
     fn deserializes_frontend_pad_json() {
         // The exact shape the GUI sends to the upsert_binding command.
         let json = r#"{"bank":0,"cell":12,"binding":{"trigger":"tap","macro":[{"type":"chord","keys":["c"]}],"color":7}}"#;

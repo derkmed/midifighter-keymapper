@@ -5,7 +5,7 @@ let config = { active: null, profiles: [] };
 let activeBank = 0;
 let selectedCell = null;
 let capturing = false;
-let draft = { trigger: "tap", tokens: [], color: 15 };
+let draft = { trigger: "tap", steps: [], color: 15 };
 let engineRunning = false;
 let palette = [];
 let veloToHex = {};
@@ -26,9 +26,30 @@ function bindingAt(bank, cell) {
   return pad ? pad.binding : null;
 }
 
-function chordTokens(binding) {
-  const step = binding && binding.macro && binding.macro[0];
-  return step && step.type === "chord" ? step.keys : [];
+function describeMouse(a) {
+  if (typeof a === "string") return a.replace(/_/g, " ");
+  if (a && a.move_to) return `move to ${a.move_to.x},${a.move_to.y}`;
+  return "?";
+}
+
+function describeStep(s) {
+  switch (s.type) {
+    case "chord": return s.keys.join(" + ");
+    case "text": return `type "${s.text}"`;
+    case "delay": return `wait ${s.ms} ms`;
+    case "mouse": return "mouse " + describeMouse(s.action);
+    default: return "?";
+  }
+}
+
+function isSingleChord(steps) {
+  return steps.length === 1 && steps[0].type === "chord";
+}
+
+function summarizeSteps(steps) {
+  if (!steps || steps.length === 0) return "";
+  if (steps.length === 1) return describeStep(steps[0]);
+  return `${steps.length} steps`;
 }
 
 // Display hex for a stored velocity: exact palette match, else nearest.
@@ -149,13 +170,12 @@ function renderGrid() {
       const pad = document.createElement("div");
       pad.className = "pad";
       const b = bindingAt(activeBank, c);
-      const keys = chordTokens(b);
       if (b) {
         pad.classList.add("bound");
         pad.style.background = hexForVelocity(b.color);
       }
       if (c === selectedCell) pad.classList.add("selected");
-      const capText = keys.length ? keys.join(" + ") : (b ? "color only" : "");
+      const capText = b ? (summarizeSteps(b.macro) || "color only") : "";
       pad.innerHTML =
         `<span class="idx">${c}</span>
          <span class="cap">${capText}</span>`;
@@ -175,16 +195,93 @@ function renderPanel() {
   }
   body.classList.remove("hidden");
   $("panel-title").textContent = `Bank ${activeBank + 1} · Cell ${selectedCell}`;
-  // trigger segmented
+  // trigger segmented — Hold only allowed for a single-chord macro
+  const single = isSingleChord(draft.steps);
   for (const btn of $("trigger-seg").children) {
+    const isHold = btn.dataset.mode === "hold";
+    btn.disabled = isHold && !single;
+    btn.title = isHold && !single ? "Hold works only with a single-chord macro" : "";
     btn.classList.toggle("active", btn.dataset.mode === draft.trigger);
   }
-  // keys
-  const kd = $("keys-display");
-  kd.textContent = draft.tokens.length ? draft.tokens.join(" + ") : "—";
-  kd.classList.toggle("capturing", capturing);
-  // color swatches
+  // macro steps + color swatches
+  renderSteps();
   renderSwatches();
+}
+
+function renderSteps() {
+  const wrap = $("steps");
+  wrap.innerHTML = "";
+  draft.steps.forEach((step, i) => {
+    const row = document.createElement("div");
+    row.className = "step";
+    const desc = document.createElement("span");
+    desc.className = "step-desc";
+    if (step.type === "text") {
+      desc.append("type ");
+      const inp = document.createElement("input");
+      inp.className = "step-input";
+      inp.value = step.text;
+      inp.onchange = () => { step.text = inp.value; persistDraft(); };
+      desc.appendChild(inp);
+    } else if (step.type === "delay") {
+      desc.append("wait ");
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.min = "0"; inp.className = "step-input num";
+      inp.value = step.ms;
+      inp.onchange = () => { step.ms = Math.max(0, Number(inp.value) || 0); persistDraft(); };
+      desc.appendChild(inp);
+      desc.append(" ms");
+    } else if (step.type === "mouse") {
+      desc.append("mouse ");
+      const sel = document.createElement("select");
+      for (const opt of ["left_click", "right_click", "middle_click"]) {
+        const o = document.createElement("option");
+        o.value = opt; o.textContent = opt.replace(/_/g, " ");
+        if (typeof step.action === "string" && step.action === opt) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.onchange = () => { step.action = sel.value; persistDraft(); };
+      desc.appendChild(sel);
+    } else {
+      desc.textContent = describeStep(step);
+    }
+    row.appendChild(desc);
+
+    const ctrls = document.createElement("div");
+    ctrls.className = "step-ctrls";
+    const up = miniBtn("↑", () => moveStep(i, -1)); up.disabled = i === 0;
+    const dn = miniBtn("↓", () => moveStep(i, 1)); dn.disabled = i === draft.steps.length - 1;
+    const del = miniBtn("✕", () => { draft.steps.splice(i, 1); persistDraft(); });
+    ctrls.append(up, dn, del);
+    row.appendChild(ctrls);
+    wrap.appendChild(row);
+  });
+  if (capturing) {
+    const hint = document.createElement("div");
+    hint.className = "step-empty capturing";
+    hint.textContent = "Press your key combo…";
+    wrap.appendChild(hint);
+  } else if (draft.steps.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "step-empty";
+    empty.textContent = "No steps yet — add one below.";
+    wrap.appendChild(empty);
+  }
+}
+
+function miniBtn(text, fn) {
+  const b = document.createElement("button");
+  b.className = "mini";
+  b.textContent = text;
+  b.onclick = fn;
+  return b;
+}
+
+function moveStep(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= draft.steps.length) return;
+  [draft.steps[i], draft.steps[j]] = [draft.steps[j], draft.steps[i]];
+  persistDraft();
 }
 
 function renderSwatches() {
@@ -219,8 +316,8 @@ function selectCell(cell) {
   selectedCell = cell;
   const b = bindingAt(activeBank, cell);
   draft = b
-    ? { trigger: b.trigger, tokens: chordTokens(b), color: b.color }
-    : { trigger: "tap", tokens: [], color: 15 };
+    ? { trigger: b.trigger, steps: JSON.parse(JSON.stringify(b.macro || [])), color: b.color }
+    : { trigger: "tap", steps: [], color: 15 };
   capturing = false;
   renderAll();
 }
@@ -229,8 +326,13 @@ function selectCell(cell) {
 async function persistDraft() {
   const p = activeProfile();
   if (!p || selectedCell === null) return;
-  const macro = draft.tokens.length ? [{ type: "chord", keys: draft.tokens }] : [];
-  const pad = { bank: activeBank, cell: selectedCell, binding: { trigger: draft.trigger || "tap", macro, color: draft.color } };
+  // Hold is only valid for a single chord; otherwise fall back to Tap.
+  let trigger = draft.trigger || "tap";
+  if (trigger === "hold" && !isSingleChord(draft.steps)) {
+    trigger = "tap";
+    draft.trigger = "tap";
+  }
+  const pad = { bank: activeBank, cell: selectedCell, binding: { trigger, macro: draft.steps, color: draft.color } };
   config = await call("upsert_binding", { profileId: p.id, pad });
   renderAll();
 }
@@ -239,9 +341,31 @@ async function clearBinding() {
   const p = activeProfile();
   if (!p || selectedCell === null) return;
   config = await call("remove_binding", { profileId: p.id, bank: activeBank, cell: selectedCell });
-  draft = { trigger: "tap", tokens: [], color: 15 };
+  draft = { trigger: "tap", steps: [], color: 15 };
   setStatus("Pad cleared", "ok");
   renderAll();
+}
+
+// Add a macro step of the given kind to the current draft.
+async function addStep(kind) {
+  if (selectedCell === null || !activeProfile()) return;
+  if (kind === "chord") {
+    capturing = true;
+    renderPanel();
+    return;
+  }
+  if (kind === "text") {
+    const t = await askText("Text to type");
+    if (t === null) return;
+    draft.steps.push({ type: "text", text: t });
+  } else if (kind === "delay") {
+    const t = await askText("Delay in milliseconds", "100");
+    if (t === null) return;
+    draft.steps.push({ type: "delay", ms: Math.max(0, Number(t) || 0) });
+  } else if (kind === "mouse") {
+    draft.steps.push({ type: "mouse", action: "left_click" });
+  }
+  persistDraft();
 }
 
 function wire() {
@@ -280,15 +404,28 @@ function wire() {
   };
 
   for (const btn of $("trigger-seg").children) {
-    btn.onclick = () => { draft.trigger = btn.dataset.mode; renderPanel(); persistDraft(); };
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      draft.trigger = btn.dataset.mode;
+      renderPanel();
+      persistDraft();
+    };
   }
-  $("capture").onclick = () => { capturing = true; renderPanel(); };
+
+  for (const btn of document.querySelectorAll("[data-add]")) {
+    btn.onclick = () => addStep(btn.dataset.add);
+  }
+  // Chord capture: the next key combo becomes a new chord step.
   window.addEventListener("keydown", (e) => {
     if (!capturing) return;
     e.preventDefault();
     const tokens = eventToTokens(e);
     const hasNonMod = tokens.some((t) => !["ctrl", "shift", "alt", "cmd"].includes(t));
-    if (hasNonMod) { draft.tokens = tokens; capturing = false; renderPanel(); persistDraft(); }
+    if (hasNonMod) {
+      draft.steps.push({ type: "chord", keys: tokens });
+      capturing = false;
+      persistDraft();
+    }
   });
 
   $("clear").onclick = clearBinding;

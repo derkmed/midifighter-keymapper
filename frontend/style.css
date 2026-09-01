@@ -141,5 +141,28 @@ select {
 .swatch-btn:hover { border-color: rgba(255, 255, 255, .5); }
 .swatch-btn.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
 
+.steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.step {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px;
+}
+.step-desc { display: flex; align-items: center; gap: 6px; flex: 1; font-size: 13px; }
+.step-input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 4px; padding: 3px 6px; width: 120px;
+}
+.step-input.num { width: 70px; }
+.step-desc select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 4px; padding: 3px 6px;
+}
+.step-ctrls { display: flex; gap: 4px; }
+button.mini { padding: 2px 7px; font-size: 12px; line-height: 1; }
+.step-empty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+.step-empty.capturing { color: var(--accent); }
+.add-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.add-steps button { font-size: 12px; padding: 5px 9px; }
+
 .actions { display: flex; gap: 8px; }
 .note { color: var(--muted); font-size: 11px; line-height: 1.5; }
