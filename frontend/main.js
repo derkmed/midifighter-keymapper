@@ -15,10 +15,13 @@ function activeProfile() {
   return config.profiles.find((p) => p.id === config.active) || null;
 }
 
+// Returns the inner Binding for a pad (or null). Callers work with the Binding
+// itself (trigger/macro/color), not the {bank,cell,binding} wrapper.
 function bindingAt(bank, cell) {
   const p = activeProfile();
   if (!p) return null;
-  return p.bindings.find((b) => b.bank === bank && b.cell === cell) || null;
+  const pad = p.bindings.find((b) => b.bank === bank && b.cell === cell);
+  return pad ? pad.binding : null;
 }
 
 function chordTokens(binding) {
@@ -140,12 +143,14 @@ function renderGrid() {
       pad.className = "pad";
       const b = bindingAt(activeBank, c);
       const keys = chordTokens(b);
-      if (b) pad.classList.add("bound");
+      if (b) {
+        pad.classList.add("bound");
+        pad.style.background = colorToCss(b.color);
+      }
       if (c === selectedCell) pad.classList.add("selected");
-      const capText = keys.length ? keys.join("+") : (b ? "(color)" : "—");
+      const capText = keys.length ? keys.join(" + ") : (b ? "color only" : "");
       pad.innerHTML =
         `<span class="idx">${c}</span>
-         <span class="dot" style="background:${b ? colorToCss(b.color) : "#000"}"></span>
          <span class="cap">${capText}</span>`;
       pad.onclick = () => selectCell(c);
       grid.appendChild(pad);
@@ -195,13 +200,13 @@ function selectCell(cell) {
   renderAll();
 }
 
-async function applyBinding() {
+// Persist the current draft to the selected pad's binding (live editing).
+async function persistDraft() {
   const p = activeProfile();
   if (!p || selectedCell === null) return;
   const macro = draft.tokens.length ? [{ type: "chord", keys: draft.tokens }] : [];
   const pad = { bank: activeBank, cell: selectedCell, binding: { trigger: draft.trigger || "tap", macro, color: draft.color } };
   config = await call("upsert_binding", { profileId: p.id, pad });
-  setStatus("Pad updated", "ok");
   renderAll();
 }
 
@@ -250,7 +255,7 @@ function wire() {
   };
 
   for (const btn of $("trigger-seg").children) {
-    btn.onclick = () => { draft.trigger = btn.dataset.mode; renderPanel(); };
+    btn.onclick = () => { draft.trigger = btn.dataset.mode; renderPanel(); persistDraft(); };
   }
   $("capture").onclick = () => { capturing = true; renderPanel(); };
   window.addEventListener("keydown", (e) => {
@@ -258,21 +263,22 @@ function wire() {
     e.preventDefault();
     const tokens = eventToTokens(e);
     const hasNonMod = tokens.some((t) => !["ctrl", "shift", "alt", "cmd"].includes(t));
-    if (hasNonMod) { draft.tokens = tokens; capturing = false; renderPanel(); }
+    if (hasNonMod) { draft.tokens = tokens; capturing = false; renderPanel(); persistDraft(); }
   });
 
   const range = $("color-range");
+  // While dragging: update UI + live device preview (cheap, no persist).
   range.oninput = () => {
     draft.color = Number(range.value);
     $("color-val").textContent = draft.color;
     $("color-swatch").style.background = colorToCss(draft.color);
     const p = activeProfile();
     if (p && selectedCell !== null && !engineRunning) {
-      // Live preview to the device; ignore errors (device may be busy/absent).
       invoke("preview_color", { baseNote: p.base_note, bank: activeBank, cell: selectedCell, color: draft.color }).catch(() => {});
     }
   };
-  $("apply").onclick = applyBinding;
+  // On release: persist the chosen color to the pad's binding.
+  range.onchange = () => { persistDraft(); };
   $("clear").onclick = clearBinding;
 
   $("engine-toggle").onclick = async () => {

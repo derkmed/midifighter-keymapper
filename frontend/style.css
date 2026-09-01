@@ -84,14 +84,23 @@ select {
   overflow: hidden;
   min-height: 90px;
 }
-.pad .dot {
-  width: 26px; height: 26px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.25);
-  background: #000;
+.pad .cap {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  padding: 0 8px;
+  word-break: break-word;
 }
-.pad .cap { font-size: 12px; color: var(--muted); text-align: center; padding: 0 6px; }
-.pad.bound .cap { color: var(--text); }
-.pad.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(80,180,255,.25); }
+.pad.bound .cap {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 2px rgba(0, 0, 0, .7);
+}
+.pad.bound .idx {
+  color: rgba(255, 255, 255, .85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+}
+.pad.selected { border-color: #fff; box-shadow: 0 0 0 3px var(--accent); }
 .pad .idx { position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--muted); }
 
 .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
