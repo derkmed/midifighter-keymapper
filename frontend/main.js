@@ -5,8 +5,10 @@ let config = { active: null, profiles: [] };
 let activeBank = 0;
 let selectedCell = null;
 let capturing = false;
-let draft = { trigger: "tap", tokens: [], color: 7 };
+let draft = { trigger: "tap", tokens: [], color: 15 };
 let engineRunning = false;
+let palette = [];
+let veloToHex = {};
 
 // ---- helpers ---------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -29,10 +31,15 @@ function chordTokens(binding) {
   return step && step.type === "chord" ? step.keys : [];
 }
 
-function colorToCss(v) {
-  if (!v) return "#000";
-  const hue = Math.round((v / 127) * 300);
-  return `hsl(${hue} 90% 55%)`;
+// Display hex for a stored velocity: exact palette match, else nearest.
+function hexForVelocity(v) {
+  if (v in veloToHex) return veloToHex[v];
+  let best = null, bestd = Infinity;
+  for (const s of palette) {
+    const d = Math.abs(s.velocity - v);
+    if (d < bestd) { bestd = d; best = s; }
+  }
+  return best ? best.hex : "#000";
 }
 
 function setStatus(msg, kind = "") {
@@ -145,7 +152,7 @@ function renderGrid() {
       const keys = chordTokens(b);
       if (b) {
         pad.classList.add("bound");
-        pad.style.background = colorToCss(b.color);
+        pad.style.background = hexForVelocity(b.color);
       }
       if (c === selectedCell) pad.classList.add("selected");
       const capText = keys.length ? keys.join(" + ") : (b ? "color only" : "");
@@ -176,10 +183,28 @@ function renderPanel() {
   const kd = $("keys-display");
   kd.textContent = draft.tokens.length ? draft.tokens.join(" + ") : "—";
   kd.classList.toggle("capturing", capturing);
-  // color
-  $("color-range").value = draft.color;
-  $("color-val").textContent = draft.color;
-  $("color-swatch").style.background = colorToCss(draft.color);
+  // color swatches
+  renderSwatches();
+}
+
+function renderSwatches() {
+  const wrap = $("swatches");
+  wrap.innerHTML = "";
+  for (const sw of palette) {
+    const b = document.createElement("button");
+    b.className = "swatch-btn" + (draft.color === sw.velocity ? " sel" : "");
+    b.style.background = sw.hex;
+    b.title = `${sw.name} (velocity ${sw.velocity})`;
+    b.onclick = () => {
+      draft.color = sw.velocity;
+      const p = activeProfile();
+      if (p && selectedCell !== null && !engineRunning) {
+        invoke("preview_color", { baseNote: p.base_note, bank: activeBank, cell: selectedCell, color: sw.velocity }).catch(() => {});
+      }
+      persistDraft();
+    };
+    wrap.appendChild(b);
+  }
 }
 
 function renderAll() {
@@ -195,7 +220,7 @@ function selectCell(cell) {
   const b = bindingAt(activeBank, cell);
   draft = b
     ? { trigger: b.trigger, tokens: chordTokens(b), color: b.color }
-    : { trigger: "tap", tokens: [], color: 7 };
+    : { trigger: "tap", tokens: [], color: 15 };
   capturing = false;
   renderAll();
 }
@@ -214,7 +239,7 @@ async function clearBinding() {
   const p = activeProfile();
   if (!p || selectedCell === null) return;
   config = await call("remove_binding", { profileId: p.id, bank: activeBank, cell: selectedCell });
-  draft = { trigger: "tap", tokens: [], color: 7 };
+  draft = { trigger: "tap", tokens: [], color: 15 };
   setStatus("Pad cleared", "ok");
   renderAll();
 }
@@ -266,19 +291,6 @@ function wire() {
     if (hasNonMod) { draft.tokens = tokens; capturing = false; renderPanel(); persistDraft(); }
   });
 
-  const range = $("color-range");
-  // While dragging: update UI + live device preview (cheap, no persist).
-  range.oninput = () => {
-    draft.color = Number(range.value);
-    $("color-val").textContent = draft.color;
-    $("color-swatch").style.background = colorToCss(draft.color);
-    const p = activeProfile();
-    if (p && selectedCell !== null && !engineRunning) {
-      invoke("preview_color", { baseNote: p.base_note, bank: activeBank, cell: selectedCell, color: draft.color }).catch(() => {});
-    }
-  };
-  // On release: persist the chosen color to the pad's binding.
-  range.onchange = () => { persistDraft(); };
   $("clear").onclick = clearBinding;
 
   $("engine-toggle").onclick = async () => {
@@ -326,6 +338,8 @@ function renderEngine() {
 (async function boot() {
   wire();
   config = await invoke("get_config");
+  palette = await invoke("get_palette");
+  veloToHex = Object.fromEntries(palette.map((s) => [s.velocity, s.hex]));
   engineRunning = await invoke("engine_running");
   try { $("autostart").checked = await invoke("get_autostart"); } catch (_) {}
   try { $("start-on-launch").checked = (await invoke("get_settings")).start_mapping_on_launch; } catch (_) {}

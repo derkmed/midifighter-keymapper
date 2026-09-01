@@ -14,6 +14,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use midifighter_keymapper_core::config::{self, Config, PadBinding, Settings};
 use midifighter_keymapper_core::edit;
 use midifighter_keymapper_core::midi::{self, Color};
+use midifighter_keymapper_core::palette::{self, Swatch};
 use midifighter_keymapper_engine::device;
 use midifighter_keymapper_engine::run::{self, EngineHandle};
 
@@ -155,6 +156,12 @@ fn engine_running(state: tauri::State<AppState>) -> bool {
     state.engine.lock().unwrap().is_some()
 }
 
+/// The device color palette (velocity + name + approximate hex).
+#[tauri::command]
+fn get_palette() -> Vec<Swatch> {
+    palette::palette()
+}
+
 #[tauri::command]
 fn get_settings(state: tauri::State<AppState>) -> Settings {
     state.config.lock().unwrap().settings.clone()
@@ -252,6 +259,7 @@ fn main() {
             start_engine,
             stop_engine,
             engine_running,
+            get_palette,
             get_settings,
             set_start_on_launch,
             get_autostart,

@@ -9,3 +9,4 @@ pub mod action;
 pub mod config;
 pub mod edit;
 pub mod midi;
+pub mod palette;
