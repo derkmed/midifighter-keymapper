@@ -439,7 +439,13 @@ function wire() {
       } else {
         await call("start_engine");
         engineRunning = true;
-        setStatus("Mapping ON — pads now fire their combos in any app", "ok");
+        // On macOS the engine runs fine but keystrokes silently no-op without
+        // Accessibility trust, so surface the banner instead of a false success.
+        if (!(await refreshAccessibility())) {
+          setStatus("Mapping ON, but grant Accessibility for keystrokes to fire", "error");
+        } else {
+          setStatus("Mapping ON — pads now fire their combos in any app", "ok");
+        }
       }
     } catch (_) {
       engineRunning = await invoke("engine_running");
@@ -471,9 +477,44 @@ function renderEngine() {
   btn.classList.toggle("running", engineRunning);
 }
 
+// ---- macOS Accessibility permission (D12) ----------------------------------
+let accessible = true;
+
+// Reflect current trust state in the banner. Returns the state so callers can
+// gate on it. On Windows/Linux the command always reports true → banner stays
+// hidden.
+async function refreshAccessibility() {
+  try {
+    accessible = await invoke("accessibility_status");
+  } catch (_) {
+    accessible = true; // command missing/failed → don't nag
+  }
+  $("ax-banner").classList.toggle("hidden", accessible);
+  return accessible;
+}
+
+function wireAccessibility() {
+  $("ax-grant").onclick = async () => {
+    await invoke("request_accessibility").catch(() => {});
+    // Trust flips only once the user toggles the switch in System Settings, so
+    // poll until it does (or they close the app). Each poll updates the banner.
+    const started = Date.now();
+    const poll = setInterval(async () => {
+      if (await refreshAccessibility() || Date.now() - started > 120000) {
+        clearInterval(poll);
+        if (accessible) setStatus("Accessibility granted — keystrokes enabled", "ok");
+      }
+    }, 1000);
+  };
+  // Catch revocation (or a grant done outside the button) while the app is open.
+  setInterval(refreshAccessibility, 3000);
+}
+
 // ---- boot ------------------------------------------------------------------
 (async function boot() {
   wire();
+  wireAccessibility();
+  await refreshAccessibility();
   config = await invoke("get_config");
   palette = await invoke("get_palette");
   veloToHex = Object.fromEntries(palette.map((s) => [s.velocity, s.hex]));

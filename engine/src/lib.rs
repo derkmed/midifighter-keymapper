@@ -5,6 +5,7 @@
 //! `input`, `device`, and `run` modules are thin adapters over `enigo`/`midir`,
 //! validated by running against real hardware (spec: "dumb adapters").
 
+pub mod accessibility;
 pub mod device;
 pub mod input;
 pub mod keys;

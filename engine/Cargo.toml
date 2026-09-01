@@ -17,3 +17,9 @@ path = "src/main.rs"
 midifighter-keymapper-core = { path = "../core" }
 midir = "0.10"
 enigo = "0.3"
+
+# macOS-only: query/prompt for Accessibility trust (AXIsProcessTrusted*), which
+# `enigo` keystroke injection requires. No-op on other platforms (see
+# src/accessibility.rs), so it is not a dependency there.
+[target.'cfg(target_os = "macos")'.dependencies]
+macos-accessibility-client = "0.0.1"

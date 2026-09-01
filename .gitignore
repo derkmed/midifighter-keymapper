@@ -8,6 +8,9 @@
 # Throwaway prototype spikes (map F3) — never ship
 /scratch/
 
+# Locally-assembled .app bundle for macOS dev/verification (build artifact)
+/dist/
+
 # OS cruft
 .DS_Store
 Thumbs.db

@@ -15,6 +15,7 @@ use midifighter_keymapper_core::config::{self, Config, PadBinding, Settings};
 use midifighter_keymapper_core::edit;
 use midifighter_keymapper_core::midi::{self, Color};
 use midifighter_keymapper_core::palette::{self, Swatch};
+use midifighter_keymapper_engine::accessibility;
 use midifighter_keymapper_engine::device;
 use midifighter_keymapper_engine::run::{self, EngineHandle};
 
@@ -156,6 +157,33 @@ fn engine_running(state: tauri::State<AppState>) -> bool {
     state.engine.lock().unwrap().is_some()
 }
 
+/// macOS Accessibility trust (D12). `enigo` keystrokes silently fail unless this
+/// app is a trusted Accessibility client; the frontend polls this to show/clear
+/// the "grant Accessibility" banner. Always `true` off macOS.
+#[tauri::command]
+fn accessibility_status() -> bool {
+    accessibility::is_trusted()
+}
+
+/// Trigger the macOS system prompt to grant Accessibility trust, and open the
+/// Privacy & Security → Accessibility pane so the user can flip the switch.
+/// Returns the trust state at call time (usually still `false` until they do).
+/// No-op returning `true` off macOS.
+#[tauri::command]
+fn request_accessibility() -> bool {
+    let trusted = accessibility::request_trust();
+    #[cfg(target_os = "macos")]
+    if !trusted {
+        // Deep-link straight to the Accessibility list. The system prompt above
+        // offers this too, but it only appears once per launch, so open it
+        // ourselves for repeat clicks.
+        let _ = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn();
+    }
+    trusted
+}
+
 /// The device color palette (velocity + name + approximate hex).
 #[tauri::command]
 fn get_palette() -> Vec<Swatch> {
@@ -259,6 +287,8 @@ fn main() {
             start_engine,
             stop_engine,
             engine_running,
+            accessibility_status,
+            request_accessibility,
             get_palette,
             get_settings,
             set_start_on_launch,

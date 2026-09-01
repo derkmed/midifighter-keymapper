@@ -166,3 +166,19 @@ button.mini { padding: 2px 7px; font-size: 12px; line-height: 1; }
 
 .actions { display: flex; gap: 8px; }
 .note { color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+/* macOS Accessibility-permission banner (D12) — shown only when untrusted. */
+.ax-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #4a2f16;
+  border-bottom: 1px solid #a86a2b;
+  color: #ffdcae;
+}
+.ax-banner.hidden { display: none; }
+.ax-banner .ax-icon { font-size: 18px; }
+.ax-banner .ax-text { flex: 1; font-size: 13px; }
+.ax-banner .ax-text b { color: #fff; }
+.ax-banner button { white-space: nowrap; }
