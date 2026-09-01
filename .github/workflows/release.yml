@@ -1,0 +1,66 @@
+name: Release
+
+# Build native installers and publish them to a GitHub Release whenever a
+# version tag (e.g. v0.1.0) is pushed. macOS builds a **universal** .app/.dmg
+# (runs on both Apple Silicon and Intel); Windows builds .msi + NSIS .exe.
+# Both are ad-hoc/unsigned — see the README's Packaging section for the
+# Gatekeeper/SmartScreen click-through.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    permissions:
+      contents: write # tauri-action needs this to create the Release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache cargo build
+        uses: swatinem/rust-cache@v2
+        with:
+          # Keep the macOS and Windows caches separate.
+          key: ${{ matrix.platform }}
+
+      - name: Build and publish the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Tag/name derive from the version in app/tauri.conf.json, so bumping
+          # that (and the tag you push) is all it takes to cut a new release.
+          tagName: v__VERSION__
+          releaseName: "Midi Fighter Key-Mapper v__VERSION__"
+          releaseBody: |
+            Download the installer for your OS below.
+
+            **macOS** (universal — Apple Silicon & Intel): open the `.dmg`, drag
+            the app to Applications. It is ad-hoc signed but **not notarized**,
+            so on first launch **right-click the app → Open**, or run:
+            `xattr -dr com.apple.quarantine /Applications/MidiFighterKeyMapper.app`
+            Then grant it **Accessibility** (Privacy & Security) so it can send
+            keystrokes.
+
+            **Windows**: run the `.msi` or the NSIS `.exe`. On the SmartScreen
+            prompt choose **More info → Run anyway**.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

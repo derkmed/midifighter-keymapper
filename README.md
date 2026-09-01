@@ -110,6 +110,20 @@ xattr -dr com.apple.quarantine /Applications/MidiFighterKeyMapper.app
 Full Developer-ID signing + notarization (a paid Apple Developer account) is out
 of scope for personal use.
 
+**Automated releases.** Pushing a version tag builds the installers on GitHub's
+runners and attaches them to a Release (`.github/workflows/release.yml`, via
+[`tauri-action`](https://github.com/tauri-apps/tauri-action)) — a **universal**
+macOS `.dmg`/`.app` plus Windows `.msi`/`.exe`, no local toolchain needed:
+
+```bash
+# bump the version in app/tauri.conf.json (and app/Cargo.toml) first, then:
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow needs no secrets (macOS is ad-hoc signed); users install from the
+repo's **Releases** page.
+
 ### Headless runner (no GUI — runs the saved active profile or a built-in demo)
 
 ```bash
