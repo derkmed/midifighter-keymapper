@@ -12,8 +12,9 @@ it run in the background from the system tray.
 > **Status:** built and verified end-to-end on **Windows** and **macOS** — on a
 > Mac the device enumerates over CoreMIDI, pads light, and presses fire their
 > combos into other apps once Accessibility is granted (see
-> [macOS: Accessibility](#macos-accessibility-permission)). Signed `.dmg`
-> packaging is the remaining nice-to-have (see [Roadmap](#roadmap)).
+> [macOS: Accessibility](#macos-accessibility-permission)). It also packages to a
+> `.dmg` / `.app`; only Developer-ID signing + notarization is left (see
+> [Roadmap](#roadmap)).
 
 ## Features
 
@@ -79,30 +80,35 @@ Privacy & Security → **Accessibility** and adds the app to the list; flip its
 switch on and the banner clears itself.
 
 macOS keys this permission to a **code-signing identity**, which a bare
-`cargo run` binary doesn't have, so the app must run as an **`.app` bundle** to
-appear in the list. Produce one with `cargo tauri build` (see
-[Roadmap](#roadmap)), or, for quick local verification, wrap the dev binary:
+`cargo run` binary doesn't have, so the app must run as a real, signed **`.app`
+bundle** to appear in the list — build one with `cargo tauri build`
+(see [Packaging](#packaging-macos--windows)) and grant *that*. If you re-toggle
+after a rebuild and trust seems stale, quit and relaunch the `.app` — TCC
+re-checks the signature on launch.
+
+### Packaging (macOS / Windows)
+
+The Tauri bundler produces native installers:
 
 ```bash
-cargo build -p midifighter-keymapper-app
-APP=dist/MidiFighterKeyMapper.app
-mkdir -p "$APP/Contents/MacOS"
-cp target/debug/midifighter-keymapper "$APP/Contents/MacOS/"
-cat > "$APP/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict>
-  <key>CFBundleExecutable</key><string>midifighter-keymapper</string>
-  <key>CFBundleIdentifier</key><string>com.derek.midifighter-keymapper</string>
-  <key>CFBundleName</key><string>MidiFighterKeyMapper</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-</dict></plist>
-PLIST
-codesign --force --deep --sign - "$APP"   # ad-hoc: stable identity for TCC
-open "$APP"
+cargo install tauri-cli --version "^2.0" --locked   # one-time
+cargo tauri build                                    # release .app + .dmg (macOS)
 ```
 
-If you re-toggle after a rebuild and trust seems stale, quit and relaunch the
-`.app` — TCC re-checks the signature on launch.
+Artifacts land in `target/release/bundle/` — on macOS, `macos/*.app` and
+`dmg/*.dmg` (on Windows, `nsis/*.exe` / `msi/*.msi`). The build **ad-hoc signs**
+the macOS app (`bundle.macOS.signingIdentity = "-"` in `tauri.conf.json`) so it
+has a stable identity for the Accessibility grant, but it is **not** notarized.
+
+Because it's unsigned by a Developer ID, Gatekeeper will block it on first open.
+Bypass it for personal use by either **right-clicking the app → Open** once, or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MidiFighterKeyMapper.app
+```
+
+Full Developer-ID signing + notarization (a paid Apple Developer account) is out
+of scope for personal use.
 
 ### Headless runner (no GUI — runs the saved active profile or a built-in demo)
 
@@ -138,8 +144,9 @@ Config is stored per-OS (on Windows:
 
 ## Roadmap
 
-- App packaging — signed/notarized `.dmg` (macOS) and `.msi`/NSIS (Windows)
-  installers. The macOS Accessibility-permission flow is done (see above).
+- Developer-ID signing + notarization so the `.dmg` opens without the Gatekeeper
+  bypass. Building the `.dmg`/`.app` (ad-hoc signed) and the macOS
+  Accessibility-permission flow are both done (see above).
 - Full-screen / game key injection via low-level scancodes.
 - Auto-switch profiles by focused application.
 
